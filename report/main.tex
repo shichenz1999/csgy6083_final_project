@@ -1158,4 +1158,61 @@ creator of the affected workspace or channel.
 \end{tabular}
 \end{center}
 
+% =======================================================
+\section*{Appendix C: User Interface}
+% =======================================================
+
+The figures below show the main views of the deployed system, captured while
+following the user guide in section (l).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.65\linewidth]{screenshots/01-register.png}
+\caption{Registration page. The user supplies an email, username, optional
+nickname, and password.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.65\linewidth]{screenshots/02-login.png}
+\caption{Login page. After successful authentication the user is redirected
+to the dashboard.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{screenshots/03-dashboard.png}
+\caption{Main dashboard. The sidebar lists the active workspace, the joined
+channels (private channels prefixed with a lock icon), and forms to create
+channels and workspaces. The right panel shows the chronological message
+list for the selected channel, a search box, and the message input.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\linewidth]{screenshots/04-workspace-info.png}
+\caption{Workspace info page. Administrators are listed in the top table;
+ordinary members are listed below with per-row \emph{Make Admin} and
+\emph{Remove} actions. The Invite a User form is admin-only, and the
+\emph{Delete Workspace} button only appears for the workspace creator.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\linewidth]{screenshots/05-profile.png}
+\caption{Profile page. The top block lets the user update their nickname.
+Pending workspace and channel invitations are surfaced in separate blocks;
+each invitation offers Accept and Decline buttons. The user's message
+history is listed at the bottom.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\linewidth]{screenshots/06-search.png}
+\caption{Search results. The query is preserved in the URL
+(\texttt{/search?keyword=...}) so the page is bookmarkable. Results are
+filtered to only include messages from channels and workspaces the current
+user belongs to.}
+\end{figure}
+
 \end{document}
