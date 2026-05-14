@@ -21,7 +21,7 @@
 \setlength{\headheight}{14pt}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{CS6083 --- Project \#1 (snickr)}
+\fancyhead[L]{CS6083 --- Final Project (snickr)}
 \fancyhead[R]{Spring 2026}
 \fancyfoot[C]{\thepage}
 \emergencystretch=2em
@@ -66,11 +66,11 @@
   showstringspaces=false, numbers=none, xleftmargin=0em
 }
 
-\title{\textbf{snickr: Relational Database Design}\\[0.2em]
-       \large CS6083 --- Project \#1}
+\title{\textbf{snickr: Relational Database Design and Web Application}\\[0.2em]
+       \large CS6083 --- Final Project}
 \author{Shichen Zhang \quad (\texttt{sz4968@nyu.edu})\\
         Zihang Yu \quad (\texttt{zy3493@nyu.edu})}
-\date{April 27, 2026}
+\date{May 15, 2026}
 
 \begin{document}
 \maketitle
@@ -79,9 +79,10 @@
 \section*{Introduction}
 \emph{snickr} is a Slack-like collaboration system where users create
 workspaces, invite members, create public/private/direct channels, and exchange
-messages inside those channels. This report presents a relational design for
-the system, including the ER model, relational schema, SQL DDL, required
-queries, and a small sample dataset used to test the design.
+messages inside those channels. This report presents the design and
+implementation of snickr, covering the relational schema (ER model, DDL,
+required queries, and sample data) and the Flask-based web application built
+on top of it.
 
 % =======================================================
 \section*{(a) Database Schema Design}
@@ -215,11 +216,13 @@ queries, and a small sample dataset used to test the design.
 \paragraph{Assumptions.}
 Email and username are globally unique; workspace names are unique per creator;
 channel names are unique only within a workspace; admin is a boolean on
-workspace membership rather than a separate entity; a direct channel is a
-channel of type \texttt{direct} with exactly two members (cardinality enforced in
-the application); channel invitations are issued only to users who are already
-members of the channel's workspace (enforced in the application); timestamps
-are stored on every action-bearing row.
+workspace membership rather than a separate entity; public channels can be
+joined by any workspace member, while private channels require an invitation
+from the channel's creator; a direct channel is a channel of type
+\texttt{direct} with exactly two members (cardinality enforced in the
+application); channel invitations target only users who are already members of
+the channel's workspace (enforced in the application); timestamps are stored on
+every action-bearing row.
 
 \paragraph{Design justification.}
 \begin{itemize}[leftmargin=1.4em,itemsep=2pt]
@@ -800,5 +803,359 @@ message_id | workspace | channel | author | posted_at | body
 -----------+-----------+---------+--------+-----------+------
 (0 rows)
 \end{lstlisting}
+
+% =======================================================
+\section*{(e) System Architecture}
+% =======================================================
+
+\emph{snickr} follows a classic three-tier web application architecture:
+a browser front-end, a Flask application server, and a PostgreSQL database.
+The application logic lives in a single Python module (\texttt{app.py}) which
+exposes routes, executes parameterized SQL via \texttt{psycopg2}, and renders
+results through Jinja2 templates.
+
+\begin{center}
+\begin{tikzpicture}[
+  every node/.style={font=\small},
+  box/.style={rectangle, draw, thick, rounded corners=2pt,
+              minimum width=3cm, minimum height=1.6cm, align=center,
+              fill=blue!10},
+  arrow/.style={-{Latex[length=2.6mm,width=2mm]}, thick},
+]
+  \node[box] (browser) at (0,0)
+    {\textbf{Browser}\\[2pt]\scriptsize HTML rendered\\ by Jinja2 templates};
+  \node[box, fill=orange!15] (flask) at (6.5,0)
+    {\textbf{Flask app.py}\\[2pt]\scriptsize routes, sessions,\\ transactions};
+  \node[box, fill=green!12] (pg) at (13,0)
+    {\textbf{PostgreSQL}\\[2pt]\scriptsize 8 tables\\(see section (b))};
+
+  % Browser <-> Flask
+  \draw[arrow] ([yshift=5mm]browser.east) -- node[above,font=\scriptsize]{HTTP request} ([yshift=5mm]flask.west);
+  \draw[arrow] ([yshift=-5mm]flask.west) -- node[below,font=\scriptsize]{HTML response} ([yshift=-5mm]browser.east);
+
+  % Flask <-> PostgreSQL
+  \draw[arrow] ([yshift=5mm]flask.east) -- node[above,font=\scriptsize]{parameterized SQL} ([yshift=5mm]pg.west);
+  \draw[arrow] ([yshift=-5mm]pg.west) -- node[below,font=\scriptsize]{result rows} ([yshift=-5mm]flask.east);
+\end{tikzpicture}
+\end{center}
+
+\paragraph{Request lifecycle.} A typical request flows through the following
+steps:
+\begin{enumerate}[leftmargin=1.4em,itemsep=1pt]
+  \item The browser issues an HTTP request (GET for navigation, POST for form
+        submissions).
+  \item Flask matches the URL to a route handler in \texttt{app.py}.
+  \item The handler validates the session (\texttt{session['user\_id']}) and
+        rejects unauthenticated requests.
+  \item It executes one or more parameterized SQL statements through
+        \texttt{psycopg2} (\texttt{\%s} placeholders, never string
+        concatenation).
+  \item Multi-step writes are wrapped in \texttt{try / commit / rollback}
+        blocks so that either all changes persist or none do.
+  \item Results are passed to a Jinja2 template, which auto-escapes all dynamic
+        output as a defense against XSS.
+  \item The rendered HTML is returned to the browser.
+\end{enumerate}
+
+% =======================================================
+\section*{(f) Technology Stack}
+% =======================================================
+
+\begin{center}
+\begin{tabular}{|l|l|p{8.4cm}|}
+\hline
+\textbf{Layer} & \textbf{Technology} & \textbf{Rationale} \\ \hline
+Backend framework & Python 3 + Flask & Lightweight routing and session
+handling; minimal setup for an academic demo. \\ \hline
+Database driver & \texttt{psycopg2} & Native PostgreSQL driver with
+parameterized queries through \texttt{\%s} placeholders. \\ \hline
+Templating & Jinja2 & Built into Flask; HTML auto-escaping is on by default,
+which is our primary XSS defense. \\ \hline
+Database & PostgreSQL 16 & Hosts the eight-table relational schema defined
+in section (b). \\ \hline
+\end{tabular}
+\end{center}
+
+% =======================================================
+\section*{(g) Implemented Features}
+% =======================================================
+
+The web layer implements the following features, grouped by category:
+
+\begin{itemize}[leftmargin=1.4em,itemsep=2pt]
+  \item \textbf{Authentication}: register, login, logout, edit nickname.
+  \item \textbf{Workspace management}: create workspace; invite users
+        (admin-only); promote member to admin; remove member; delete
+        workspace.
+  \item \textbf{Channels}: three types (public, private, direct) with
+        type-specific join semantics. Public channels are self-joined
+        from the sidebar, private channels are joined only after a
+        creator-issued invitation, and direct channels are created
+        simultaneously with their two participants.
+  \item \textbf{Messages}: post messages, read in chronological order
+        (query 5 from section (c)).
+  \item \textbf{Search}: cross-workspace search with permission filtering
+        (query 7 from section (c)).
+  \item \textbf{Invitations}: respond to workspace and channel invitations
+        from the profile page.
+\end{itemize}
+
+% =======================================================
+\section*{(h) URL Design and Session State}
+% =======================================================
+
+\paragraph{Session.} The application uses Flask's built-in signed-cookie
+session to store the user's \texttt{user\_id}. Every protected route begins
+with the same guard, \texttt{if 'user\_id' not in session: redirect(login)},
+so unauthenticated requests cannot reach handlers that touch user-scoped data.
+
+\paragraph{Bookmarkable URLs.} The choice of selected workspace, selected
+channel, and search keyword is encoded entirely in the URL rather than in the
+session. The following URLs are all valid bookmarks:
+\begin{itemize}[leftmargin=1.4em,itemsep=1pt]
+  \item \texttt{/dashboard?ws\_id=N\&ch\_id=M} --- open workspace \texttt{N},
+        focused on channel \texttt{M}.
+  \item \texttt{/workspace\_info/<ws\_id>} --- the member / admin management
+        page for a specific workspace.
+  \item \texttt{/search?keyword=xxx} --- the search-results page for a given
+        keyword (directly addresses Project 2's requirement to ``bookmark the
+        result page of a search'').
+\end{itemize}
+
+% =======================================================
+\section*{(i) SQL Injection Defense}
+% =======================================================
+
+All SQL is executed through \texttt{psycopg2} using \texttt{\%s} placeholders,
+so user-supplied values are bound as parameters by the driver and never
+interpreted as SQL syntax. There is no string concatenation of user input
+into SQL anywhere in the codebase.
+
+A representative example from \texttt{/register}:
+
+\begin{lstlisting}[language=Python, basicstyle=\ttfamily\small, frame=single, rulecolor=\color{black!20}, backgroundcolor=\color{sqlbg}]
+cur.execute(
+    "INSERT INTO users (email, username, nickname, password_hash) "
+    "VALUES (%s, %s, %s, %s)",
+    (email, username, nickname, hashed_password)
+)
+\end{lstlisting}
+
+The keyword search in \texttt{/search} also keeps the user-supplied keyword
+parameterised; the SQL wildcards are added on the Python side so that the
+keyword itself is still bound by \texttt{psycopg2}:
+
+\begin{lstlisting}[language=Python, basicstyle=\ttfamily\small, frame=single, rulecolor=\color{black!20}, backgroundcolor=\color{sqlbg}]
+like_keyword = f"%{keyword}%"   # wildcards added in Python
+cur.execute(search_query, (user_id, user_id, like_keyword))
+\end{lstlisting}
+
+% =======================================================
+\section*{(j) XSS Defense}
+% =======================================================
+
+Cross-site scripting is prevented by relying on Jinja2's default behaviour:
+every \texttt{\{\{ \ldots\ \}\}} expression in a template is HTML-escaped
+before being written to the response.
+
+For example, the message body in the chat view is rendered as
+\texttt{<div class="msg-body">\{\{ m.body \}\}</div>}. If a user submits the
+text \texttt{<script>alert(1)</script>}, the database stores it verbatim but
+the template emits
+\texttt{\&lt;script\&gt;alert(1)\&lt;/script\&gt;}, which the browser
+displays as literal text rather than executing.
+
+% =======================================================
+\section*{(k) Transactions and Concurrency}
+% =======================================================
+
+Multi-step database operations are wrapped in \texttt{try / commit / rollback}
+blocks so that either all rows are written or none of them are. The list
+below covers every route where a transaction is required.
+
+\begin{description}[leftmargin=2em, style=nextline, itemsep=4pt]
+  \item[\texttt{/create\_workspace}]
+        INSERT workspace + INSERT admin member.
+        \emph{Rollback} on \texttt{UNIQUE} violation.
+  \item[\texttt{/create\_channel}]
+        INSERT channel + INSERT channel member(s) --- one for public/private
+        (the creator), two for direct (both participants).
+        \emph{Rollback} on duplicate name or any failed step.
+  \item[\texttt{/respond\_invite} (accept)]
+        UPDATE \texttt{workspace\_invitations.status} + INSERT into
+        \texttt{workspace\_members}.
+        \emph{Rollback} on conflict; declined invitations skip the second step.
+  \item[\texttt{/respond\_channel\_invite} (accept)]
+        UPDATE \texttt{channel\_invitations.status} + INSERT into
+        \texttt{channel\_members}.
+        \emph{Rollback} on conflict; declined invitations skip the second step.
+  \item[\texttt{/delete\_workspace}]
+        DELETE from \texttt{messages} $\to$ \texttt{channel\_members} $\to$
+        \texttt{channel\_invitations} $\to$ \texttt{channels} $\to$
+        \texttt{workspace\_invitations} $\to$ \texttt{workspace\_members}
+        $\to$ \texttt{workspaces}.
+        \emph{Rollback} preserves the entire workspace if any DELETE fails.
+  \item[\texttt{/remove\_member}]
+        DELETE the user's rows in \texttt{channel\_members},
+        \texttt{channel\_invitations}, \texttt{workspace\_invitations}, and
+        \texttt{workspace\_members} (scoped to the workspace).
+        \emph{Rollback} preserves the user's complete state.
+\end{description}
+
+\paragraph{Database-level concurrency guards.} The schema constraints listed
+below prevent inconsistent state when two requests race against each other.
+If a second transaction tries to insert a conflicting row, it receives an
+\texttt{IntegrityError} which the application catches and reports to the user.
+\begin{itemize}[leftmargin=1.4em,itemsep=1pt]
+  \item \texttt{UNIQUE(email)} and \texttt{UNIQUE(username)} on
+        \texttt{users}: prevent duplicate account creation.
+  \item \texttt{UNIQUE(workspace\_id, name)} on \texttt{channels}: prevents
+        duplicate channel names in the same workspace (and, indirectly,
+        duplicate direct-message channels through the
+        \texttt{dm-\{u1\}-\{u2\}} naming convention).
+  \item \texttt{UNIQUE(created\_by, name)} on \texttt{workspaces}: prevents
+        the same user from creating two workspaces with the same name.
+  \item \texttt{PRIMARY KEY (workspace\_id, user\_id)} on
+        \texttt{workspace\_members}: prevents duplicate workspace memberships.
+  \item \texttt{PRIMARY KEY (channel\_id, user\_id)} on
+        \texttt{channel\_members}: prevents duplicate channel memberships.
+  \item \texttt{PRIMARY KEY (workspace\_id, invitee\_user\_id)} on
+        \texttt{workspace\_invitations}: enforces one invitation per
+        (workspace, invitee) pair.
+  \item \texttt{PRIMARY KEY (channel\_id, invitee\_user\_id)} on
+        \texttt{channel\_invitations}: enforces one invitation per
+        (channel, invitee) pair.
+\end{itemize}
+
+% =======================================================
+\section*{(l) User Guide}
+% =======================================================
+
+A typical user journey through the system is summarised below.
+
+\begin{enumerate}[leftmargin=1.4em,itemsep=1pt]
+  \item \textbf{Sign up}: visit \texttt{/register}, enter an email, a unique
+        username, an optional nickname, and a password.
+  \item \textbf{Log in}: \texttt{/login} with username and password. On
+        success the user lands on the dashboard.
+  \item \textbf{Edit profile}: click the username in the dashboard sidebar
+        to open \texttt{/profile}; the Edit Profile block at the top updates
+        the nickname.
+  \item \textbf{Create a workspace}: use the ``+ New Workspace'' form in the
+        sidebar. The creator automatically becomes the workspace's initial
+        admin.
+  \item \textbf{Invite users}: from the workspace info page, admins can use
+        the ``Invite a User'' form to send a pending invitation.
+  \item \textbf{Respond to invitations}: \texttt{/profile} surfaces both
+        workspace and channel invitations with Accept/Decline buttons.
+  \item \textbf{Manage members}: the workspace info page shows separate
+        Administrators and Members tables. Admins see ``Make Admin'' and
+        ``Remove'' buttons in the Members table.
+  \item \textbf{Create a channel}: use the ``+ Create Channel'' form in the
+        sidebar. Select \emph{public} (anyone in the workspace can self-join),
+        \emph{private} (only the creator can invite), or \emph{direct}
+        (a recipient is chosen from a dropdown of workspace members and both
+        users are added).
+  \item \textbf{Join a public channel}: public channels the user has not yet
+        joined appear dimmed in the sidebar with a green ``Join'' button.
+  \item \textbf{Invite to a private channel}: when viewing a private channel
+        the user created, an Invite form appears next to the search box;
+        the recipient is selected from the workspace-member dropdown.
+  \item \textbf{Send messages}: type into the input box at the bottom of the
+        channel view and submit. Messages appear in chronological order.
+  \item \textbf{Search}: use the search box in the top-right of the channel
+        view; results are filtered so the user only sees messages from
+        channels and workspaces they belong to.
+  \item \textbf{Log out}: click ``Logout'' in the sidebar to clear the
+        session.
+\end{enumerate}
+
+% =======================================================
+\section*{Appendix A: GitHub Repository}
+% =======================================================
+
+The complete source code for snickr is hosted on the \texttt{dev} branch at\\
+\indent\texttt{https://github.com/Zihangyu600/snickr/tree/dev}
+
+The repository contains:
+\begin{itemize}[leftmargin=1.4em,itemsep=1pt]
+  \item \texttt{app.py} --- all Flask routes and database logic.
+  \item \texttt{templates/} --- the seven HTML templates (login, register,
+        dashboard, profile, workspace\_info, search, and the shared
+        \texttt{base.html}).
+  \item \texttt{sql/} --- \texttt{schema.sql} and \texttt{sample\_data.sql}
+        bundled for self-contained setup.
+  \item \texttt{README.md} --- end-to-end setup instructions (create database,
+        load schema, configure connection, install dependencies, run the app).
+\end{itemize}
+
+% =======================================================
+\section*{Appendix B: Route Reference}
+% =======================================================
+
+The application exposes the following routes. The \emph{Auth} column uses
+\texttt{--} for public routes, \texttt{\checkmark} for routes requiring an
+authenticated session, \texttt{admin} for routes requiring workspace
+administrator privileges, and \texttt{creator} for routes restricted to the
+creator of the affected workspace or channel.
+
+\paragraph{Authentication}
+\begin{center}\small
+\begin{tabular}{|l|l|c|p{6.8cm}|}
+\hline
+\textbf{Route} & \textbf{Method} & \textbf{Auth} & \textbf{Purpose} \\ \hline
+\texttt{/register} & GET/POST & -- & Create a user account \\ \hline
+\texttt{/login}    & GET/POST & -- & Sign in \\ \hline
+\texttt{/logout}   & GET      & \checkmark & Clear the session \\ \hline
+\end{tabular}
+\end{center}
+
+\paragraph{Dashboard and messages}
+\begin{center}\small
+\begin{tabular}{|l|l|c|p{6.8cm}|}
+\hline
+\textbf{Route} & \textbf{Method} & \textbf{Auth} & \textbf{Purpose} \\ \hline
+\texttt{/dashboard}    & GET  & \checkmark & Main chat view (workspace/channel list, messages) \\ \hline
+\texttt{/send\_message} & POST & \checkmark & Post a message to the current channel \\ \hline
+\texttt{/search}       & GET  & \checkmark & Keyword search across accessible content \\ \hline
+\end{tabular}
+\end{center}
+
+\paragraph{Workspaces}
+\begin{center}\small
+\begin{tabular}{|l|l|c|p{6.6cm}|}
+\hline
+\textbf{Route} & \textbf{Method} & \textbf{Auth} & \textbf{Purpose} \\ \hline
+\texttt{/create\_workspace}          & POST & \checkmark & Create a workspace (transaction) \\ \hline
+\texttt{/workspace\_info/<ws\_id>}   & GET  & \checkmark & Workspace details, members, invitations \\ \hline
+\texttt{/invite\_user}               & POST & admin & Invite a user to the workspace \\ \hline
+\texttt{/respond\_invite}            & POST & \checkmark & Accept / decline a workspace invitation \\ \hline
+\texttt{/promote\_admin}             & POST & admin & Promote a member to admin \\ \hline
+\texttt{/remove\_member}             & POST & admin & Remove a member (transaction) \\ \hline
+\texttt{/delete\_workspace/<ws\_id>} & POST & creator & Delete the workspace (transaction) \\ \hline
+\end{tabular}
+\end{center}
+
+\paragraph{Channels}
+\begin{center}\small
+\begin{tabular}{|l|l|c|p{6.6cm}|}
+\hline
+\textbf{Route} & \textbf{Method} & \textbf{Auth} & \textbf{Purpose} \\ \hline
+\texttt{/create\_channel}          & POST & \checkmark & Create a channel; the direct branch creates a DM \\ \hline
+\texttt{/join\_channel}            & POST & \checkmark & Self-join a public channel \\ \hline
+\texttt{/invite\_to\_channel}      & POST & creator & Invite a user to a private channel \\ \hline
+\texttt{/respond\_channel\_invite} & POST & \checkmark & Accept / decline a channel invitation \\ \hline
+\end{tabular}
+\end{center}
+
+\paragraph{Profile}
+\begin{center}\small
+\begin{tabular}{|l|l|c|p{6.8cm}|}
+\hline
+\textbf{Route} & \textbf{Method} & \textbf{Auth} & \textbf{Purpose} \\ \hline
+\texttt{/profile}         & GET  & \checkmark & Pending invitations, message history, profile editor \\ \hline
+\texttt{/update\_nickname} & POST & \checkmark & Update the user's nickname \\ \hline
+\end{tabular}
+\end{center}
 
 \end{document}
